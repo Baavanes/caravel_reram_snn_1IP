@@ -19,24 +19,24 @@ Clock clk
 rise -> rise
     min     max
 4.650000 5.570000 source latency
-5.848361         network latency _7004_/CLK
-        7.544633 network latency mprj.synapse_matrix_inst.X1_inst/wb_clk_i
+5.765081         network latency _09771_/CLK
+        7.497382 network latency mprj.synapse_matrix_inst.X1_inst/wb_clk_i
 ---------------
-10.498362 13.114634 latency
-        2.616272 skew
+10.415082 13.067382 latency
+        2.652301 skew
 
 fall -> fall
     min     max
 4.650000 5.570000 source latency
-5.896023         network latency _7004_/CLK
-        7.473334 network latency mprj.synapse_matrix_inst.X1_inst/wb_clk_i
+5.852863         network latency _09771_/CLK
+        7.446874 network latency mprj.synapse_matrix_inst.X1_inst/wb_clk_i
 ---------------
-10.546023 13.043334 latency
-        2.497311 skew
+10.502863 13.016873 latency
+        2.514010 skew
 
 
 
 ===========================================================================
 report_clock_min_period
 ============================================================================
-clk period_min = 14.13 fmax = 70.79
+clk period_min = 11.24 fmax = 88.94
