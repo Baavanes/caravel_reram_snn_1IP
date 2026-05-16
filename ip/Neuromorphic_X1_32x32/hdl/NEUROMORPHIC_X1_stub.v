@@ -1,10 +1,11 @@
-(* blackbox *)
 module Neuromorphic_X1_wb (
  
  `ifdef USE_POWER_PINS
-   inout         VSS,            // 0 V analog ground
-   inout         VDDA,           // 1.8 V analog supply (mapped to vdda1)
-   inout         VDDC,           // 1.8 V analog core digital supply (mapped to vccd1)
+   inout         VDDC1,            // 0 V analog ground
+   inout         VDDC2,            // 0 V analog ground
+   inout         VDDA1,           // 1.8 V analog supply (mapped to vdda1)
+   inout         VDDA2,           // 1.8 V analog supply (mapped to vdda1)
+   inout         VSS,           // 1.8 V analog core digital supply (mapped to vccd1)
  `endif
  
     // Clocks & resets
@@ -44,9 +45,7 @@ module Neuromorphic_X1_wb (
     input         Vbias,          // 1.8 V analog bias
     input         Vcc_wl_reset,   // 2.6 V wordline reset rail
     input         Vcc_set,        // 3.3 V array set rail
-    input         Vcc_reset,      // 3.3 V array reset rail
-    input         Vcc_L,          // 5 V level shifter supply
-    input         Vcc_Body        // 5 V body-bias supply
+    input         dc_bias
 );
 
 endmodule

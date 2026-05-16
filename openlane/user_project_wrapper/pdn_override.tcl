@@ -1,5 +1,3 @@
-
-
 # 1) Global power/ground pin connects (if available in your tree)
 if {[info exists ::env(SCRIPTS_DIR)]} {
   set _gg "$::env(SCRIPTS_DIR)/openroad/common/set_global_connections.tcl"

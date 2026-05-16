@@ -3,12 +3,16 @@
 
 module nvm_synapse_matrix (
 `ifdef USE_POWER_PINS
-      inout VDDC,
-      inout VDDA,
-      inout VSS,
+   inout         VDDC1,            // 0 V analog ground
+   inout         VDDC2,            // 0 V analog ground
+   inout         VDDA1,           // 1.8 V analog supply (mapped to vdda1)
+   inout         VDDA2,           // 1.8 V analog supply (mapped to vdda1)
+   inout         VSS,           // 1.8 V analog core digital supply (mapped to vccd1)
 `endif
   input         wb_clk_i,
   input         wb_rst_i,
+  input         user_clk,     // user clock
+  input         user_rst,     // user reset
   input         wbs_stb_i,
   input         wbs_cyc_i,
   input         wbs_we_i,
@@ -31,9 +35,7 @@ module nvm_synapse_matrix (
   input         Vbias,
   input         Vcc_wl_reset,
   input         Vcc_set,
-  input         Vcc_reset,
-  input         Vcc_L,
-  input         Vcc_Body
+  input         dc_bias
 );
   parameter NUM_OF_MACRO = 1;
   parameter [31:0] ADDR_MATCH = 32'h3000_000C;
@@ -49,7 +51,11 @@ module nvm_synapse_matrix (
 
   Neuromorphic_X1_wb X1_inst (
     `ifdef USE_POWER_PINS
-    .VDDC(VDDC), .VDDA(VDDA), .VSS(VSS),
+      .VDDC1(VDDC1),
+      .VDDC2(VDDC2),
+      .VDDA1(VDDA1),
+      .VDDA2(VDDA2),
+      .VSS(VSS),
     `endif
     .user_clk (wb_clk_i),  .user_rst (wb_rst_i),
     .wb_clk_i (wb_clk_i),  .wb_rst_i (wb_rst_i),
@@ -64,7 +70,7 @@ module nvm_synapse_matrix (
     .Bias_comp2(Bias_comp2), .Vcc_wl_read(Vcc_wl_read),
     .Vcc_wl_set(Vcc_wl_set), .Vbias(Vbias),
     .Vcc_wl_reset(Vcc_wl_reset), .Vcc_set(Vcc_set),
-    .Vcc_reset(Vcc_reset), .Vcc_L(Vcc_L), .Vcc_Body(Vcc_Body)
+    .dc_bias(dc_bias)
   );
 
  

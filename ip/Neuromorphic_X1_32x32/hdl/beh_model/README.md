@@ -1,8 +1,7 @@
-
 # Neuromorphic_X1 Behavioral Model (Wishbone)
 
 **Version**: Simulation-only  
-**Address used**: 0x3000_000C
+**Address used**: 0x3000_0004
 
 ---
 
@@ -16,7 +15,7 @@ This is a **non-synthesizable behavioral model** of a 32×32 1-bit array with a 
 
 ### Files in this project:
 
-- **Neuromorphic_X1_wb**: The Wishbone shim. It exposes **ONE address** (0x3000_000C). Writes/reads at that address are forwarded to the core.
+- **Neuromorphic_X1_wb**: The Wishbone shim. It exposes **ONE address** (0x3000_0004). Writes/reads at that address are forwarded to the core.
 - **Neuromorphic_X1**: The behavioral **core** that holds:
   - The 32×32 array
   - An input FIFO (commands)
@@ -26,159 +25,143 @@ This is a **non-synthesizable behavioral model** of a 32×32 1-bit array with a 
 
 ---
 
-## 2) The One Wishbone Address (0x3000_000C)
+## 2) The One Wishbone Address (0x3000_0004)
 
-The shim only has address `0x3000_000C`:
+The shim only has address `0x3000_0004`:
 
-- **WB WRITE** to `0x3000_000C`: Your 32-bit word is treated as a command.
-- **WB READ** from `0x3000_000C`: You pop one 32-bit word of read data.
+- **WB WRITE** to `0x3000_0004`: Your 32-bit word is treated as a command.
+- **WB READ** from `0x3000_0004`: You pop one 32-bit word of read data.
 
 ### The shim checks:
 
-`EN = (stb & cyc & (adr == 0x3000_000C) & (sel == 4’hF))`
+`EN = (stb & cyc & (adr == 0x3000_0004) & (sel == 4’hF))`
 
 ### Signal Mapping (shim → core):
 
-| Signal    | Description                         |
-|-----------|-------------------------------------|
-| CLKin     | `wb_clk_i`                          |
-| RSTin     | `wb_rst_i`                          |
-| DI        | `wbs_dat_i` (write data / command word)|
+| Signal    | Description |
+|-----------|-------------|
+| CLKin     | `wb_clk_i` |
+| RSTin     | `wb_rst_i` |
+| DI        | `wbs_dat_i` (write data / command word) |
 | W_RB      | `wbs_we_i` (1 = write command, 0 = read pop) |
 | DO        | `wbs_dat_o` (read data back to Wishbone) |
 | core_ack  | `wbs_ack_o` (acknowledge back to Wishbone) |
 
-### ACK Behavior (Simple):
+### ACK Behavior
 
-- **For a WRITE cycle** at `0x3000_000C`, `core_ack = 1` when the command is successfully pushed into the input FIFO.
-- **For a READ cycle** at `0x3000_000C`, `core_ack = 1` when one word is popped from the output FIFO into `DO`.
-- If the output FIFO is empty, **ACK stays LOW**. The master should keep **CYC/STB active** and wait for **ACK to go HIGH** (standard Wishbone wait).
+- **For a WRITE cycle** at `0x3000_0004`, `core_ack = 1` when the command is successfully pushed into the input FIFO.
+- **For a READ cycle** at `0x3000_0004`:
+  - If valid data is available in `op_fifo`, one word is popped into `DO` and `ACK=1`.
+  - If no data is available in `op_fifo`, `ACK` is still asserted and `DO = 32'hDEAD_C0DE`.
+
+This prevents the master from halting or getting stuck waiting forever.
+
+Also, if a READ command is issued but Wishbone read is initiated **before data is fetched from the crossbar array into `op_fifo`**, then:
+- `ACK = 1`
+- `DO = 32'hDEAD_C0DE`
+
+This acts as a “not ready / retry later” response.
 
 ---
 
 ## 3) Command Word Format (The 32-bit DI)
 
-**Bits**:  
+**Bits**:
 - `[31:30] MODE`
 - `[29:25] ROW`
 - `[24:20] COL`
 - `[19:0] DATA/flags`
 
-### Supported **MODE** values in this model:
+### Supported MODE values
 
-- **2’b11** → PROGRAM (Write the bit at [ROW][COL])
-- **2’b01** → READ (Queue a read of [ROW][COL])
-- **2’b10** → FORMING (reserved in doc; **NOT implemented** in the minimal code)
+- **2’b11** → PROGRAM (Write bit at [ROW][COL])
+- **2’b01** → READ (Queue read of [ROW][COL])
+- **2’b10** → FORMING (reserved / not implemented)
 
-#### PROGRAM (MODE=2’b11):
+#### PROGRAM (MODE=2’b11)
 
-- **DATA[7:0] = 8’hFF** → write `1` into the cell
-- **DATA[7:0] = 8’h00** → write `0` into the cell
+Programming decision is based on `DATA[7:0]` threshold:
 
-#### READ (MODE=2’b01):
+- If `DATA[7:0] > 8'h7F` → write `1` into the cell
+- If `DATA[7:0] <= 8'h7F` → write `0` into the cell
 
-- The core will later push the bit at `[ROW][COL]` into the output FIFO.
-- When software performs a WB READ at `0x3000_000C`, one value is popped and returned on `DO` with **ACK=1**.
+Examples:
+- `8'hFF` → writes `1`
+- `8'h80` → writes `1`
+- `8'h7F` → writes `0`
+- `8'h00` → writes `0`
+
+#### READ (MODE=2’b01)
+
+- Core later pushes bit at `[ROW][COL]` into output FIFO.
+- WB READ at `0x3000_0004` pops one value when available.
+- If unavailable, returns `32'hDEAD_C0DE`.
 
 ---
 
-## 4) What’s Inside the Core
+## 4) Core Internals
 
 - **32×32 1-bit array**: `array_mem[row][col]`
-- **Input FIFO** (`ip_fifo`, depth 32): Where incoming commands are queued.
-- **Output FIFO** (`op_fifo`, depth 32): Where completed read data waits.
-- **Simple “engine”**:
-  - Pops commands from the input FIFO.
-  - For **PROGRAM**: Waits `WR_Dly` cycles, then sets the target bit.
-  - For **READ**: Waits `RD_Dly` cycles, then pushes the bit into `op_fifo`.
+- **Input FIFO** (`ip_fifo`, depth 32)
+- **Output FIFO** (`op_fifo`, depth 32)
 
-All delays are done with `@(posedge CLKin)` loops to keep the simulation simple.
+### Engine behavior
 
----
-
-## 5) Handshake, Timing, and Delays
-
-- **Writes**:  
-  ACK is asserted when the command is accepted (pushed into `ip_fifo`). The actual PROGRAM work happens later in the engine.
-  
-- **Reads**:  
-  A READ command (MODE=01) only queues a **request**; the data arrives later in `op_fifo` after `RD_Dly` cycles. When software performs a WB READ on `0x3000_000C`, **ACK will be HIGH** only if a word is available to pop from `op_fifo` that cycle.  
-  If `op_fifo` is empty, the core holds **ACK LOW** and the master waits.
-
-**Default Delays in the Code**:
-- `WR_Dly = 200`  // PROGRAM latency (in `CLKin` cycles)
-- `RD_Dly = 44`   // READ latency (in `CLKin` cycles)
+- Pops commands from `ip_fifo`
+- PROGRAM: waits `WR_Dly`, then updates bit
+- READ: waits `RD_Dly`, then pushes result into `op_fifo`
 
 ---
 
-## 6) Bring-up & Expectations
+## 5) Timing / Delays
 
-- **On reset**, both FIFOs are empty, but array will persist.
-- **Before any PROGRAM**, a READ of a location will eventually return `0`.
-- **After a PROGRAM**, the bit persists (non-volatile behavior in simulation).
+**Default delays:**
+- `WR_Dly = 200`
+- `RD_Dly = 44`
 
-### Quick Checklist:
-1. Release reset.
-2. PROGRAM a location with **MODE=11** (e.g., `row=1`, `col=1`, `DATA=0xFF`).
-3. Queue a **READ** with **MODE=01** for the same location.
-4. Do a WB **READ** at `0x3000_000C` and wait for **ACK=1**; `DO` should be `0x0000_0001`.
-5. Repeat **READ/POP** to prove non-volatility.
+Writes are acknowledged immediately after enqueue.
+
+Reads:
+- Return real data if available
+- Else return `32'hDEAD_C0DE`
 
 ---
 
-## 7) Software View (Example)
+## 6) Software Example
 
-Use one address: `0x3000_000C`
+Use address: `0x3000_0004`
 
-**PROGRAM cell (row=1, col=1) to ‘1’**:
+**PROGRAM cell (row=1, col=1):**
 ```c
-write32(0x3000_000C, {2’b11, 5’d1, 5’d1, 20’h0FF});
+write32(0x3000_0004, {2’b11, 5’d1, 5’d1, 20’h080});
 ```
 
-**Queue READ of the same cell**:
+**Queue READ:**
 ```c
-write32(0x3000_000C, {2’b01, 5’d1, 5’d1, 20’h00000});
+write32(0x3000_0004, {2’b01, 5’d1, 5’d1, 20’h00000});
 ```
 
-**Pop the read result (blocking read)**:
+**Pop result:**
 ```c
-data = read32(0x3000_000C);
-// The master should hold CYC/STB until ACK=1, then sample data.
+if Read Immediately
+data = read32(0x3000_0004);
+
+if (data == 0xDEADC0DE) {
+    // data not ready, retry later
+}
+```
+
+```c
+if Read after Read Delay
+data = read32(0x3000_0004);
+
+if (data == 0x00000001) {
+    // data was ready and valid
+}
 ```
 
 ---
 
-## 8) Common Pitfalls
+## 7) Notes
 
-- **Reading too early**: You must first queue a READ command (MODE=01). Then perform a WB READ and wait for ACK=1.
-- **Assuming combinational reads**: They are not. Data appears in `op_fifo` only after `RD_Dly` cycles inside the engine.
-- **Ignoring SEL**: The shim expects `SEL=4’hF` for 32-bit access.
-- **Expecting synthesizable code**: This is a **behavioral model only**. It uses simulation-only delay loops.
-
----
-
-## 9) Testbench Tips
-
-The included testbench style does three steps per location:
-1. **PROGRAM** → 
-2. **Enqueue READ** → 
-3. **WB READ (pop)**
-
-It also checks that **ACK only pulses** when the operation occurs (accepting a command or popping data).
-
----
-
-## 10) Where to Change Things
-
-- **Change delays**:
-  - `WR_Dly / RD_Dly` in `Neuromorphic_X1`
-  
-- **Depths**: The FIFOs are hard-coded at 32 in this simple model.
-  
-- **FORMING**: **MODE=10** not implemented in simulator 
-
----
-
-## License/Notes
-
-This model is intended for **internal simulation** and **documentation**. It is not a drop-in hardware implementation. **Use at your own risk**.
+This is a **simulation-only behavioral model** intended for documentation and verification.
