@@ -17,13 +17,11 @@ openlane2-venv
 design_info.yaml
 openlane/dependencies/
 pdk/
-*.lib
 *.gds
 *.mag
 *.def
 *.v
 *.spice
-*.lib
 *.gds
 *.mag
 *.def
@@ -33,5 +31,4 @@ pdk/
 *.gds
 *.mag
 *.def
-*.lib
 *.spice
