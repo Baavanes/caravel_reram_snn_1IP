@@ -65,7 +65,7 @@
       "gds": ["dir::../../ip/Neuromorphic_X1_32x32/gds/Neuromorphic_X1_wb.gds"],
       "lef": ["dir::../../ip/Neuromorphic_X1_32x32/lef/Neuromorphic_X1_wb.lef"],
       "instances": {
-        "mprj.synapse_matrix_inst.X1_inst": { "location": [455.0, 805.0], "orientation": "R90" }
+        "mprj.synapse_matrix_inst.X1_inst": { "location": [150.0, 470.0], "orientation": "R0" }
       },
       "lib": { "*": "dir::../../ip/Neuromorphic_X1_32x32/lib/Neuromorphic_X1_wb.lib" }
     }
